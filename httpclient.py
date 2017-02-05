@@ -21,8 +21,10 @@
 import sys
 import socket
 import re
+#from urlparse import urlparse
 # you may use urllib to encode data appropriately
 import urllib
+from urlparse import urlparse
 
 def help():
     print "httpclient.py [GET/POST] [URL]\n"
@@ -34,19 +36,55 @@ class HTTPResponse(object):
 
 class HTTPClient(object):
     #def get_host_port(self,url):
+    def __init__(self):
+        self.path = None
+        self.host = None
+        self.port = 80
+        self.query = None
+
+    def parse_url(self, url):
+        print("Parsing Url", url)
+    	#self.path = urlparse(url).path
+
+        parsed = urlparse(url)
+    	self.host = parsed.hostname
+        self.port = parsed.port
+        self.path = parsed.path
+        self.query = parsed.query
+
+        #if (self.path == ""): self.path = '/'
+
+        url = url.strip("http://")
+
+        if (self.host == ""): self.host = url.split(':')[0]#.strip("http://").strip("www.")
+
+        if ((self.port == None) and (':' in url) and ('/' in url)): 
+            self.port = int(url.split(':')[1].split("/")[0])
+
+        elif ((self.port == None) and (':' in url)):
+            self.port = int(url.split(':')[1])
+
+        if (self.port == None): self.port = 80
+
+        return
 
     def connect(self, host, port):
         # use sockets!
-        return None
+        clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        clientSocket.connect((self.host, self.port))
+
+        if(clientSocket == None):
+            print ("CONNECTION FAILED")
+        return clientSocket
 
     def get_code(self, data):
-        return None
+        return int(data.split("\r\n")[0].split(' ')[1])
 
     def get_headers(self,data):
-        return None
+        return data.split("\r\n\r\n")[0]
 
     def get_body(self, data):
-        return None
+        return data.split("\r\n\r\n")[1]
 
     # read everything from the socket
     def recvall(self, sock):
@@ -63,14 +101,76 @@ class HTTPClient(object):
     def GET(self, url, args=None):
         code = 500
         body = ""
+
+        self.parse_url(url)
+        print ("getting", url)
+        print ("host is:", self.host)
+        print ("port is:", self.port)
+        print ("path is:", self.path)
+
+        cs = self.connect(self.host, self.port)
+
+        cs.send("GET " + self.path + " HTTP/1.1\r\n")
+        cs.send("HOST: " + self.host + "\r\n")
+        cs.sendall("Accept: */*\r\n\r\n")
+
+        data = self.recvall(cs)
+
+        code = self.get_code(data)
+        body = self.get_body(data)
+
+        print("code:", code, "\n body: " + body)
+
+
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
         code = 500
         body = ""
+
+        self.parse_url(url)
+        print("Posting to", url)
+        print ("host is:", self.host)
+        print ("port is:", self.port)
+        print ("path is:", self.path)
+        print ("query is:", self.query)
+        print ("args are:", args)
+
+
+        cs = self.connect(self.host, self.port)
+
+        cs.send("POST " + self.path + " HTTP/1.1\r\n")
+        cs.send("HOST: " + self.host + "\r\n")
+        cs.send("Accept: */*\r\n")
+
+        if (args != None):
+            encoded = urllib.urlencode(args)
+
+            cs.send("Content-Length: ")
+            print("content length", str(sys.getsizeof(encoded)))
+            cs.send(str(len(encoded)))
+            cs.send("\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n")
+            cs.send(str(encoded))
+        else:
+            cs.send("Content-Length: 0\r\n\r\n")
+        cs.send("\r\n\r\n")
+
+        data = self.recvall(cs)
+
+        print("DATA-------------------------------\n")
+        print(data)
+        print("/DATA~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+
+        code = self.get_code(data)
+        body = self.get_body(data)
+
+        print("code:", code, "\n body: " + body)
+
+ 
         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
+        print("url"), url
         if (command == "POST"):
             return self.POST( url, args )
         else:
