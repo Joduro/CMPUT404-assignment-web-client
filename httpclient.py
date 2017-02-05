@@ -43,8 +43,7 @@ class HTTPClient(object):
         self.query = None
 
     def parse_url(self, url):
-        print("Parsing Url", url)
-    	#self.path = urlparse(url).path
+        #print("Parsing Url", url)
 
         parsed = urlparse(url)
     	self.host = parsed.hostname
@@ -56,11 +55,12 @@ class HTTPClient(object):
 
         url = url.strip("http://")
 
-        if (self.host == ""): self.host = url.split(':')[0]#.strip("http://").strip("www.")
+        if ('/' not in self.path): self.path = '/'
+
+        if (self.host == None or self.host == ""): self.host = url.split(':')[0]#.strip("http://").strip("www.")
 
         if ((self.port == None) and (':' in url) and ('/' in url)): 
             self.port = int(url.split(':')[1].split("/")[0])
-
         elif ((self.port == None) and (':' in url)):
             self.port = int(url.split(':')[1])
 
@@ -103,23 +103,31 @@ class HTTPClient(object):
         body = ""
 
         self.parse_url(url)
+        """
         print ("getting", url)
         print ("host is:", self.host)
         print ("port is:", self.port)
         print ("path is:", self.path)
+        """
+        try:
 
-        cs = self.connect(self.host, self.port)
+            cs = self.connect(self.host, self.port)
 
-        cs.send("GET " + self.path + " HTTP/1.1\r\n")
-        cs.send("HOST: " + self.host + "\r\n")
-        cs.sendall("Accept: */*\r\n\r\n")
+            cs.send("GET " + self.path + " HTTP/1.1\r\n")
+            cs.send("HOST: " + self.host + "\r\n")
+            cs.sendall("Accept: */*\r\n\r\n")
 
-        data = self.recvall(cs)
+            data = self.recvall(cs)
 
-        code = self.get_code(data)
-        body = self.get_body(data)
+            print(data)
 
-        print("code:", code, "\n body: " + body)
+            code = self.get_code(data)
+            body = self.get_body(data)
+
+            #print("code:", code, "\n body: " + body)
+        except Exception, e:
+            print("A GET Error has occured: ", e)
+            code = 500
 
 
         return HTTPResponse(code, body)
@@ -129,48 +137,49 @@ class HTTPClient(object):
         body = ""
 
         self.parse_url(url)
+        """
         print("Posting to", url)
         print ("host is:", self.host)
         print ("port is:", self.port)
         print ("path is:", self.path)
         print ("query is:", self.query)
         print ("args are:", args)
+        """
 
+        try:
+            cs = self.connect(self.host, self.port)
 
-        cs = self.connect(self.host, self.port)
+            cs.send("POST " + self.path + " HTTP/1.1\r\n")
+            cs.send("HOST: " + self.host + "\r\n")
+            cs.send("Accept: */*\r\n")
 
-        cs.send("POST " + self.path + " HTTP/1.1\r\n")
-        cs.send("HOST: " + self.host + "\r\n")
-        cs.send("Accept: */*\r\n")
+            if (args != None):
+                encoded = urllib.urlencode(args)
 
-        if (args != None):
-            encoded = urllib.urlencode(args)
+                cs.send("Content-Length: ")
+                cs.send(str(len(encoded)))
+                cs.send("\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n")
+                cs.send(str(encoded))
+            else:
+                cs.send("Content-Length: 0\r\n\r\n")
+            cs.send("\r\n\r\n")
 
-            cs.send("Content-Length: ")
-            print("content length", str(sys.getsizeof(encoded)))
-            cs.send(str(len(encoded)))
-            cs.send("\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n")
-            cs.send(str(encoded))
-        else:
-            cs.send("Content-Length: 0\r\n\r\n")
-        cs.send("\r\n\r\n")
+            data = self.recvall(cs)
 
-        data = self.recvall(cs)
+            print(data)
 
-        print("DATA-------------------------------\n")
-        print(data)
-        print("/DATA~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+            code = self.get_code(data)
+            body = self.get_body(data)
+        except Exception, e:
+            print("An Error has occured: ", e)
+            code = 500
 
-        code = self.get_code(data)
-        body = self.get_body(data)
-
-        print("code:", code, "\n body: " + body)
+        #print("code:", code, "\n body: " + body)
 
  
         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
-        print("url"), url
         if (command == "POST"):
             return self.POST( url, args )
         else:
